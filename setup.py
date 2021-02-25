@@ -8,15 +8,15 @@ import sys
 from distutils.spawn import spawn
 
 
-# Get the version from youtube_dlc/version.py without importing the package
-exec(compile(open('youtube_dlc/version.py').read(),
-             'youtube_dlc/version.py', 'exec'))
+# Get the version from yt_dlp/version.py without importing the package
+exec(compile(open('yt_dlp/version.py').read(),
+             'yt_dlp/version.py', 'exec'))
 
 
 DESCRIPTION = 'Command-line program to download videos from YouTube.com and many other other video platforms.'
 
 LONG_DESCRIPTION = '\n\n'.join((
-    'Official repository: <https://github.com/pukkandan/yt-dlp>',
+    'Official repository: <https://github.com/yt-dlp/yt-dlp>',
     '**PS**: Many links in this document will not work since this is a copy of the README.md from Github',
     open("README.md", "r", encoding="utf-8").read()))
 
@@ -27,10 +27,11 @@ if len(sys.argv) >= 2 and sys.argv[1] == 'py2exe':
     print("inv")
 else:
     files_spec = [
-        ('etc/bash_completion.d', ['youtube-dlc.bash-completion']),
-        ('etc/fish/completions', ['youtube-dlc.fish']),
-        ('share/doc/youtube_dlc', ['README.txt']),
-        ('share/man/man1', ['youtube-dlc.1'])
+        ('share/bash-completion/completions', ['completions/bash/*']),
+        ('share/zsh/site-functions', ['completions/zsh/*']),
+        ('share/fish/vendor_completions.d', ['completions/fish/*']),
+        ('share/doc/yt_dlp', ['README.txt']),
+        ('share/man/man1', ['yt-dlp.1'])
     ]
     root = os.path.dirname(os.path.abspath(__file__))
     data_files = []
@@ -46,7 +47,7 @@ else:
     params = {
         'data_files': data_files,
     }
-    params['entry_points'] = {'console_scripts': ['youtube-dlc = youtube_dlc:main']}
+    params['entry_points'] = {'console_scripts': ['yt-dlp = yt_dlp:main']}
 
 
 class build_lazy_extractors(Command):
@@ -61,7 +62,7 @@ class build_lazy_extractors(Command):
 
     def run(self):
         spawn(
-            [sys.executable, 'devscripts/make_lazy_extractors.py', 'youtube_dlc/extractor/lazy_extractors.py'],
+            [sys.executable, 'devscripts/make_lazy_extractors.py', 'yt_dlp/extractor/lazy_extractors.py'],
             dry_run=self.dry_run,
         )
 
@@ -72,21 +73,21 @@ setup(
     name="yt-dlp",
     version=__version__,
     maintainer="pukkandan",
-    maintainer_email="pukkandan@gmail.com",
+    maintainer_email="pukkandan.ytdlp@gmail.com",
     description=DESCRIPTION,
     long_description=LONG_DESCRIPTION,
     long_description_content_type="text/markdown",
-    url="https://github.com/pukkandan/yt-dlp",
+    url="https://github.com/yt-dlp/yt-dlp",
     packages=packages,
     install_requires=REQUIREMENTS,
     project_urls={
-        'Documentation': 'https://github.com/pukkandan/yt-dlp#yt-dlp',
-        'Source': 'https://github.com/pukkandan/yt-dlp',
-        'Tracker': 'https://github.com/pukkandan/yt-dlp/issues',
+        'Documentation': 'https://yt-dlp.readthedocs.io',
+        'Source': 'https://github.com/yt-dlp/yt-dlp',
+        'Tracker': 'https://github.com/yt-dlp/yt-dlp/issues',
         #'Funding': 'https://donate.pypi.org',
     },
     classifiers=[
-	    "Topic :: Multimedia :: Video",
+        "Topic :: Multimedia :: Video",
         "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
         "Programming Language :: Python",
@@ -110,7 +111,7 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=2.6',
-	
-	cmdclass={'build_lazy_extractors': build_lazy_extractors},
+
+    cmdclass={'build_lazy_extractors': build_lazy_extractors},
     **params
 )
