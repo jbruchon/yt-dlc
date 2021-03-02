@@ -245,7 +245,7 @@ Then simply run `make`. You can also run `make yt-dlp` instead to compile only t
                                      "OUTPUT TEMPLATE" for a list of available
                                      keys) to match if the key is present, !key
                                      to check if the key is not present,
-                                     key>NUMBER (like "comment_count > 12", also
+                                     key>NUMBER (like "view_count > 12", also
                                      works with >=, <, <=, !=, =) to compare
                                      against a number, key = 'LITERAL' (like
                                      "uploader = 'Mike Smith'", also works with
@@ -326,9 +326,10 @@ Then simply run `make`. You can also run `make yt-dlp` instead to compile only t
     --no-hls-use-mpegts              Do not use the mpegts container for HLS
                                      videos. This is default when not
                                      downloading live streams
-    --external-downloader NAME       Use the specified external downloader.
-                                     Currently supports aria2c, avconv, axel,
-                                     curl, ffmpeg, httpie, wget
+    --external-downloader NAME       Name or path of the external downloader to
+                                     use. Currently supports aria2c, avconv,
+                                     axel, curl, ffmpeg, httpie, wget
+                                     (Recommended: aria2c)
     --downloader-args NAME:ARGS      Give these arguments to the external
                                      downloader. Specify the downloader name and
                                      the arguments separated by a colon ":". You
@@ -402,7 +403,9 @@ Then simply run `make`. You can also run `make yt-dlp` instead to compile only t
     --no-write-playlist-metafiles    Do not write playlist metadata when using
                                      --write-info-json, --write-description etc.
     --get-comments                   Retrieve video comments to be placed in the
-                                     .info.json file
+                                     .info.json file. The comments are fetched
+                                     even without this option if the extraction
+                                     is known to be quick
     --load-info-json FILE            JSON file containing the video information
                                      (created with the "--write-info-json"
                                      option)
@@ -490,6 +493,8 @@ Then simply run `make`. You can also run `make yt-dlp` instead to compile only t
     --bidi-workaround                Work around terminals that lack
                                      bidirectional text support. Requires bidiv
                                      or fribidi executable in PATH
+    --sleep-requests SECONDS         Number of seconds to sleep between requests
+                                     during data extraction
     --sleep-interval SECONDS         Number of seconds to sleep before each
                                      download when used alone or a lower bound
                                      of a range for randomized sleep before each
@@ -500,7 +505,8 @@ Then simply run `make`. You can also run `make yt-dlp` instead to compile only t
                                      before each download (maximum possible
                                      number of seconds to sleep). Must only be
                                      used along with --min-sleep-interval
-    --sleep-subtitles SECONDS        Enforce sleep interval on subtitles as well
+    --sleep-subtitles SECONDS        Number of seconds to sleep before each
+                                     subtitle download
 
 ## Video Format Options:
     -f, --format FORMAT              Video format code, see "FORMAT SELECTION"
@@ -646,7 +652,7 @@ Then simply run `make`. You can also run `make yt-dlp` instead to compile only t
                                      similar syntax to the output template can
                                      also be used. The parsed parameters replace
                                      any existing values and can be use in
-                                     output templateThis option can be used
+                                     output template. This option can be used
                                      multiple times. Example: --parse-metadata
                                      "title:%(artist)s - %(title)s" matches a
                                      title like "Coldplay - Paradise". Example
@@ -691,6 +697,8 @@ Then simply run `make`. You can also run `make yt-dlp` instead to compile only t
                                      directory
 
 ## Extractor Options:
+    --extractor-retries RETRIES      Number of retries for known extractor
+                                     errors (default is 10), or "infinite"
     --allow-dynamic-mpd              Process dynamic DASH manifests (default)
                                      (Alias: --no-ignore-dynamic-mpd)
     --ignore-dynamic-mpd             Do not process dynamic DASH manifests
@@ -810,7 +818,7 @@ The available fields are:
  - `dislike_count` (numeric): Number of negative ratings of the video
  - `repost_count` (numeric): Number of reposts of the video
  - `average_rating` (numeric): Average rating give by users, the scale used depends on the webpage
- - `comment_count` (numeric): Number of comments on the video
+ - `comment_count` (numeric): Number of comments on the video (For some extractors, comments are only downloaded at the end, and so this field cannot be used)
  - `age_limit` (numeric): Age restriction for the video (years)
  - `is_live` (boolean): Whether this video is a live stream or a fixed-length video
  - `was_live` (boolean): Whether this video was originally a live stream

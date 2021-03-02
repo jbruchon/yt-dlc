@@ -324,6 +324,8 @@ class YoutubeDL(object):
     source_address:    Client-side IP address to bind to.
     call_home:         Boolean, true iff we are allowed to contact the
                        yt-dlp servers for debugging. (BROKEN)
+    sleep_interval_requests: Number of seconds to sleep between requests
+                       during extraction
     sleep_interval:    Number of seconds to sleep before each download when
                        used alone or a lower bound of a range for randomized
                        sleep before each download (minimum possible number
@@ -334,6 +336,7 @@ class YoutubeDL(object):
                        Must only be used along with sleep_interval.
                        Actual sleep time will be a random float from range
                        [sleep_interval; max_sleep_interval].
+    sleep_interval_subtitles: Number of seconds to sleep before each subtitle download
     listformats:       Print an overview of available video formats and exit.
     list_thumbnails:   Print a table of all thumbnails and exit.
     match_filter:      A function that gets called with the info_dict of
@@ -378,17 +381,18 @@ class YoutubeDL(object):
                         Use 'default' as the name for arguments to passed to all PP
 
     The following options are used by the extractors:
-    dynamic_mpd:        Whether to process dynamic DASH manifests (default: True)
+    extractor_retries: Number of times to retry for known errors
+    dynamic_mpd:       Whether to process dynamic DASH manifests (default: True)
     hls_split_discontinuity: Split HLS playlists to different formats at
-                        discontinuities such as ad breaks (default: False)
+                       discontinuities such as ad breaks (default: False)
     youtube_include_dash_manifest: If True (default), DASH manifests and related
-                        data will be downloaded and processed by extractor.
-                        You can reduce network I/O by disabling it if you don't
-                        care about DASH. (only for youtube)
+                       data will be downloaded and processed by extractor.
+                       You can reduce network I/O by disabling it if you don't
+                       care about DASH. (only for youtube)
     youtube_include_hls_manifest: If True (default), HLS manifests and related
-                        data will be downloaded and processed by extractor.
-                        You can reduce network I/O by disabling it if you don't
-                        care about HLS. (only for youtube)
+                       data will be downloaded and processed by extractor.
+                       You can reduce network I/O by disabling it if you don't
+                       care about HLS. (only for youtube)
     """
 
     _NUMERIC_FIELDS = set((
@@ -406,6 +410,7 @@ class YoutubeDL(object):
     _ies = []
     _pps = {'beforedl': [], 'aftermove': [], 'normal': []}
     __prepare_filename_warned = False
+    _first_webpage_request = True
     _download_retcode = None
     _num_downloads = None
     _playlist_level = 0
@@ -420,6 +425,7 @@ class YoutubeDL(object):
         self._ies_instances = {}
         self._pps = {'beforedl': [], 'aftermove': [], 'normal': []}
         self.__prepare_filename_warned = False
+        self._first_webpage_request = True
         self._post_hooks = []
         self._progress_hooks = []
         self._download_retcode = 0
@@ -2036,6 +2042,7 @@ class YoutubeDL(object):
             self.to_stdout(formatSeconds(info_dict['duration']))
         print_mandatory('format')
         if self.params.get('forcejson', False):
+            self.post_extract(info_dict)
             self.to_stdout(json.dumps(info_dict))
 
     def process_info(self, info_dict):
@@ -2059,6 +2066,7 @@ class YoutubeDL(object):
         if self._match_entry(info_dict, incomplete=False) is not None:
             return
 
+        self.post_extract(info_dict)
         self._num_downloads += 1
 
         info_dict = self.pre_process(info_dict)
@@ -2166,15 +2174,6 @@ class YoutubeDL(object):
                     else:
                         try:
                             dl(sub_filename, sub_info, subtitle=True)
-                            '''
-                            if self.params.get('sleep_interval_subtitles', False):
-                                dl(sub_filename, sub_info)
-                            else:
-                                sub_data = ie._request_webpage(
-                                    sub_info['url'], info_dict['id'], note=False).read()
-                                with io.open(encodeFilename(sub_filename), 'wb') as subfile:
-                                    subfile.write(sub_data)
-                            '''
                             files_to_move[sub_filename] = sub_filename_final
                         except (ExtractorError, IOError, OSError, ValueError, compat_urllib_error.URLError, compat_http_client.HTTPException, socket.error) as err:
                             self.report_warning('Unable to download subtitle for "%s": %s' %
@@ -2501,6 +2500,7 @@ class YoutubeDL(object):
                 raise
             else:
                 if self.params.get('dump_single_json', False):
+                    self.post_extract(res)
                     self.to_stdout(json.dumps(res))
 
         return self._download_retcode
@@ -2548,6 +2548,24 @@ class YoutubeDL(object):
                 if old_filename in files_to_move:
                     del files_to_move[old_filename]
         return files_to_move, infodict
+
+    @staticmethod
+    def post_extract(info_dict):
+        def actual_post_extract(info_dict):
+            if info_dict.get('_type') in ('playlist', 'multi_video'):
+                for video_dict in info_dict.get('entries', {}):
+                    actual_post_extract(video_dict)
+                return
+
+            if '__post_extractor' not in info_dict:
+                return
+            post_extractor = info_dict['__post_extractor']
+            if post_extractor:
+                info_dict.update(post_extractor().items())
+            del info_dict['__post_extractor']
+            return
+
+        actual_post_extract(info_dict)
 
     def pre_process(self, ie_info):
         info = dict(ie_info)
@@ -2940,7 +2958,7 @@ class YoutubeDL(object):
                 self.to_screen('[%s] %s: Thumbnail %sis already present' %
                                (info_dict['extractor'], info_dict['id'], thumb_display_id))
             else:
-                self.to_screen('[%s] %s: Downloading thumbnail %s...' %
+                self.to_screen('[%s] %s: Downloading thumbnail %s ...' %
                                (info_dict['extractor'], info_dict['id'], thumb_display_id))
                 try:
                     uf = self.urlopen(t['url'])

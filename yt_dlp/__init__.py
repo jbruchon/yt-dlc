@@ -169,25 +169,33 @@ def _real_main(argv=None):
             parser.error('max sleep interval must be greater than or equal to min sleep interval')
     else:
         opts.max_sleep_interval = opts.sleep_interval
+    if opts.sleep_interval_subtitles is not None:
+        if opts.sleep_interval_subtitles < 0:
+            parser.error('subtitles sleep interval must be positive or 0')
+    if opts.sleep_interval_requests is not None:
+        if opts.sleep_interval_requests < 0:
+            parser.error('requests sleep interval must be positive or 0')
     if opts.ap_mso and opts.ap_mso not in MSO_INFO:
         parser.error('Unsupported TV Provider, use --ap-list-mso to get a list of supported TV Providers')
     if opts.overwrites:
         # --yes-overwrites implies --no-continue
         opts.continue_dl = False
 
-    def parse_retries(retries):
+    def parse_retries(retries, name=''):
         if retries in ('inf', 'infinite'):
             parsed_retries = float('inf')
         else:
             try:
                 parsed_retries = int(retries)
             except (TypeError, ValueError):
-                parser.error('invalid retry count specified')
+                parser.error('invalid %sretry count specified' % name)
         return parsed_retries
     if opts.retries is not None:
         opts.retries = parse_retries(opts.retries)
     if opts.fragment_retries is not None:
-        opts.fragment_retries = parse_retries(opts.fragment_retries)
+        opts.fragment_retries = parse_retries(opts.fragment_retries, 'fragment ')
+    if opts.extractor_retries is not None:
+        opts.extractor_retries = parse_retries(opts.extractor_retries, 'extractor ')
     if opts.buffersize is not None:
         numeric_buffersize = FileDownloader.parse_bytes(opts.buffersize)
         if numeric_buffersize is None:
@@ -261,6 +269,11 @@ def _real_main(argv=None):
     any_getting = opts.geturl or opts.gettitle or opts.getid or opts.getthumbnail or opts.getdescription or opts.getfilename or opts.getformat or opts.getduration or opts.dumpjson or opts.dump_single_json
     any_printing = opts.print_json
     download_archive_fn = expand_path(opts.download_archive) if opts.download_archive is not None else opts.download_archive
+
+    # If JSON is not printed anywhere, but comments are requested, save it to file
+    printing_json = opts.dumpjson or opts.print_json or opts.dump_single_json
+    if opts.getcomments and not printing_json:
+        opts.writeinfojson = True
 
     def report_conflict(arg1, arg2):
         write_string('WARNING: %s is ignored since %s was given\n' % (arg2, arg1), out=sys.stderr)
@@ -447,6 +460,7 @@ def _real_main(argv=None):
         'overwrites': opts.overwrites,
         'retries': opts.retries,
         'fragment_retries': opts.fragment_retries,
+        'extractor_retries': opts.extractor_retries,
         'skip_unavailable_fragments': opts.skip_unavailable_fragments,
         'keep_fragments': opts.keep_fragments,
         'buffersize': opts.buffersize,
@@ -466,7 +480,7 @@ def _real_main(argv=None):
         'updatetime': opts.updatetime,
         'writedescription': opts.writedescription,
         'writeannotations': opts.writeannotations,
-        'writeinfojson': opts.writeinfojson or opts.getcomments,
+        'writeinfojson': opts.writeinfojson,
         'allow_playlist_files': opts.allow_playlist_files,
         'getcomments': opts.getcomments,
         'writethumbnail': opts.writethumbnail,
@@ -524,6 +538,7 @@ def _real_main(argv=None):
         'fixup': opts.fixup,
         'source_address': opts.source_address,
         'call_home': opts.call_home,
+        'sleep_interval_requests': opts.sleep_interval_requests,
         'sleep_interval': opts.sleep_interval,
         'max_sleep_interval': opts.max_sleep_interval,
         'sleep_interval_subtitles': opts.sleep_interval_subtitles,
@@ -541,7 +556,6 @@ def _real_main(argv=None):
         'postprocessor_args': opts.postprocessor_args,
         'cn_verification_proxy': opts.cn_verification_proxy,
         'geo_verification_proxy': opts.geo_verification_proxy,
-        'config_location': opts.config_location,
         'geo_bypass': opts.geo_bypass,
         'geo_bypass_country': opts.geo_bypass_country,
         'geo_bypass_ip_block': opts.geo_bypass_ip_block,

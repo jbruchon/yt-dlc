@@ -1452,8 +1452,10 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
         url, smuggled_data = unsmuggle_url(url, {})
         video_id = self._match_id(url)
         base_url = self.http_scheme() + '//www.youtube.com/'
-        webpage_url = base_url + 'watch?v=' + video_id + '&has_verified=1&bpctr=9999999999'
-        webpage = self._download_webpage(webpage_url, video_id, fatal=False)
+        webpage_url = base_url + 'watch?v=' + video_id
+        webpage = self._download_webpage(
+            webpage_url + '&has_verified=1&bpctr=9999999999',
+            video_id, fatal=False)
 
         player_response = None
         if webpage:
@@ -2010,9 +2012,10 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
 
         # Get comments
         # TODO: Refactor and move to seperate function
-        if get_comments:
+        def extract_comments():
             expected_video_comment_count = 0
             video_comments = []
+            comment_xsrf = xsrf_token
 
             def find_value(html, key, num_chars=2, separator='"'):
                 pos_begin = html.find(key) + len(key) + num_chars
@@ -2081,7 +2084,7 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
             self.to_screen('Downloading comments')
             while continuations:
                 continuation = continuations.pop()
-                comment_response = get_continuation(continuation, xsrf_token)
+                comment_response = get_continuation(continuation, comment_xsrf)
                 if not comment_response:
                     continue
                 if list(search_dict(comment_response, 'externalErrorMessage')):
@@ -2092,7 +2095,7 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
                     continue
                 # not sure if this actually helps
                 if 'xsrf_token' in comment_response:
-                    xsrf_token = comment_response['xsrf_token']
+                    comment_xsrf = comment_response['xsrf_token']
 
                 item_section = comment_response['response']['continuationContents']['itemSectionContinuation']
                 if first_continuation:
@@ -2121,7 +2124,7 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
                     while reply_continuations:
                         time.sleep(1)
                         continuation = reply_continuations.pop()
-                        replies_data = get_continuation(continuation, xsrf_token, True)
+                        replies_data = get_continuation(continuation, comment_xsrf, True)
                         if not replies_data or 'continuationContents' not in replies_data[1]['response']:
                             continue
 
@@ -2150,10 +2153,13 @@ class YoutubeIE(YoutubeBaseInfoExtractor):
                 time.sleep(1)
 
             self.to_screen('Total comments downloaded: %d of ~%d' % (len(video_comments), expected_video_comment_count))
-            info.update({
+            return {
                 'comments': video_comments,
                 'comment_count': expected_video_comment_count
-            })
+            }
+
+        if get_comments:
+            info['__post_extractor'] = extract_comments
 
         self.mark_watched(video_id, player_response)
 
@@ -2756,28 +2762,36 @@ class YoutubeTabIE(YoutubeBaseInfoExtractor):
         for page_num in itertools.count(1):
             if not continuation:
                 break
-            count = 0
-            retries = 3
-            while count <= retries:
+            retries = self._downloader.params.get('extractor_retries', 3)
+            count = -1
+            last_error = None
+            while count < retries:
+                count += 1
+                if last_error:
+                    self.report_warning('%s. Retrying ...' % last_error)
                 try:
-                    # Downloading page may result in intermittent 5xx HTTP error
-                    # that is usually worked around with a retry
                     browse = self._download_json(
                         'https://www.youtube.com/browse_ajax', None,
                         'Downloading page %d%s'
                         % (page_num, ' (retry #%d)' % count if count else ''),
                         headers=headers, query=continuation)
-                    break
                 except ExtractorError as e:
-                    if isinstance(e.cause, compat_HTTPError) and e.cause.code in (500, 503):
-                        count += 1
-                        if count <= retries:
+                    if isinstance(e.cause, compat_HTTPError) and e.cause.code in (500, 503, 404):
+                        # Downloading page may result in intermittent 5xx HTTP error
+                        # Sometimes a 404 is also recieved. See: https://github.com/ytdl-org/youtube-dl/issues/28289
+                        last_error = 'HTTP Error %s' % e.cause.code
+                        if count < retries:
                             continue
                     raise
-            if not browse:
-                break
-            response = try_get(browse, lambda x: x[1]['response'], dict)
-            if not response:
+                else:
+                    response = try_get(browse, lambda x: x[1]['response'], dict)
+
+                    # Youtube sometimes sends incomplete data
+                    # See: https://github.com/ytdl-org/youtube-dl/issues/28194
+                    if response.get('continuationContents') or response.get('onResponseReceivedActions'):
+                        break
+                    last_error = 'Incomplete data recieved'
+            if not browse or not response:
                 break
 
             known_continuation_renderers = {
@@ -2998,11 +3012,17 @@ class YoutubeTabIE(YoutubeBaseInfoExtractor):
                 return self.url_result(video_id, ie=YoutubeIE.ie_key(), video_id=video_id)
             self.to_screen('Downloading playlist %s - add --no-playlist to just download video %s' % (playlist_id, video_id))
 
-        count = 0
-        retries = 3
+        retries = self._downloader.params.get('extractor_retries', 3)
+        count = -1
         while count < retries:
+            count += 1
             # Sometimes youtube returns a webpage with incomplete ytInitialData
-            webpage = self._download_webpage(url, item_id)
+            # See: https://github.com/yt-dlp/yt-dlp/issues/116
+            if count:
+                self.report_warning('Incomplete yt initial data recieved. Retrying ...')
+            webpage = self._download_webpage(
+                url, item_id,
+                'Downloading webpage%s' % ' (retry #%d)' % count if count else '')
             identity_token = self._extract_identity_token(webpage, item_id)
             data = self._extract_yt_initial_data(item_id, webpage)
             err_msg = None
@@ -3017,9 +3037,6 @@ class YoutubeTabIE(YoutubeBaseInfoExtractor):
                 raise ExtractorError('YouTube said: %s' % err_msg, expected=True)
             if data.get('contents') or data.get('currentVideoEndpoint'):
                 break
-            count += 1
-            self.to_screen(
-                'Incomplete yt initial data recieved. Retrying (attempt %d of %d)...' % (count, retries))
 
         tabs = try_get(
             data, lambda x: x['contents']['twoColumnBrowseResultsRenderer']['tabs'], list)

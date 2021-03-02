@@ -347,7 +347,7 @@ def parseOpts(overrideArguments=None):
             'Specify any key (see "OUTPUT TEMPLATE" for a list of available keys) to '
             'match if the key is present, '
             '!key to check if the key is not present, '
-            'key>NUMBER (like "comment_count > 12", also works with '
+            'key>NUMBER (like "view_count > 12", also works with '
             '>=, <, <=, !=, =) to compare against a number, '
             'key = \'LITERAL\' (like "uploader = \'Mike Smith\'", also works with !=) '
             'to match against a string literal '
@@ -369,7 +369,7 @@ def parseOpts(overrideArguments=None):
         help='Download only the video, if the URL refers to a video and a playlist')
     selection.add_option(
         '--yes-playlist',
-        action='store_false', dest='noplaylist', default=False,
+        action='store_false', dest='noplaylist',
         help='Download the playlist, if the URL refers to a video and a playlist')
     selection.add_option(
         '--age-limit',
@@ -650,8 +650,8 @@ def parseOpts(overrideArguments=None):
         '--external-downloader',
         dest='external_downloader', metavar='NAME',
         help=(
-            'Use the specified external downloader. '
-            'Currently supports %s' % ', '.join(list_external_downloaders())))
+            'Name or path of the external downloader to use. '
+            'Currently supports %s (Recommended: aria2c)' % ', '.join(list_external_downloaders())))
     downloader.add_option(
         '--downloader-args', '--external-downloader-args',
         metavar='NAME:ARGS', dest='external_downloader_args', default={}, type='str',
@@ -697,6 +697,10 @@ def parseOpts(overrideArguments=None):
         dest='bidi_workaround', action='store_true',
         help='Work around terminals that lack bidirectional text support. Requires bidiv or fribidi executable in PATH')
     workarounds.add_option(
+        '--sleep-requests', metavar='SECONDS',
+        dest='sleep_interval_requests', type=float,
+        help='Number of seconds to sleep between requests during data extraction')
+    workarounds.add_option(
         '--sleep-interval', '--min-sleep-interval', metavar='SECONDS',
         dest='sleep_interval', type=float,
         help=(
@@ -714,7 +718,7 @@ def parseOpts(overrideArguments=None):
     workarounds.add_option(
         '--sleep-subtitles', metavar='SECONDS',
         dest='sleep_interval_subtitles', default=0, type=int,
-        help='Enforce sleep interval on subtitles as well')
+        help='Number of seconds to sleep before each subtitle download')
 
     verbosity = optparse.OptionGroup(parser, 'Verbosity and Simulation Options')
     verbosity.add_option(
@@ -981,7 +985,9 @@ def parseOpts(overrideArguments=None):
     filesystem.add_option(
         '--get-comments',
         action='store_true', dest='getcomments', default=False,
-        help='Retrieve video comments to be placed in the .info.json file')
+        help=(
+            'Retrieve video comments to be placed in the .info.json file. '
+            'The comments are fetched even without this option if the extraction is known to be quick'))
     filesystem.add_option(
         '--load-info-json', '--load-info',
         dest='load_info_filename', metavar='FILE',
@@ -1137,7 +1143,7 @@ def parseOpts(overrideArguments=None):
             'Give field name to extract data from, and format of the field seperated by a ":". '
             'Either regular expression with named capture groups or a '
             'similar syntax to the output template can also be used. '
-            'The parsed parameters replace any existing values and can be use in output template'
+            'The parsed parameters replace any existing values and can be use in output template. '
             'This option can be used multiple times. '
             'Example: --parse-metadata "title:%(artist)s - %(title)s" matches a title like '
             '"Coldplay - Paradise". '
@@ -1212,6 +1218,10 @@ def parseOpts(overrideArguments=None):
         help=optparse.SUPPRESS_HELP)
 
     extractor = optparse.OptionGroup(parser, 'Extractor Options')
+    extractor.add_option(
+        '--extractor-retries',
+        dest='extractor_retries', metavar='RETRIES', default=10,
+        help='Number of retries for known extractor errors (default is %default), or "infinite"')
     extractor.add_option(
         '--allow-dynamic-mpd', '--no-ignore-dynamic-mpd',
         action='store_true', dest='dynamic_mpd', default=True,

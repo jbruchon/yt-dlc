@@ -103,6 +103,7 @@ from .awaan import (
 )
 from .azmedien import AZMedienIE
 from .baidu import BaiduVideoIE
+from .bandaichannel import BandaiChannelIE
 from .bandcamp import BandcampIE, BandcampAlbumIE, BandcampWeeklyIE
 from .bbc import (
     BBCCoUkIE,
@@ -737,6 +738,7 @@ from .mtv import (
 )
 from .muenchentv import MuenchenTVIE
 from .mwave import MwaveIE, MwaveMeetGreetIE
+from .mxplayer import MxplayerIE
 from .mychannels import MyChannelsIE
 from .myspace import MySpaceIE, MySpaceAlbumIE
 from .myspass import MySpassIE

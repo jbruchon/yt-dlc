@@ -294,6 +294,14 @@ class InfoExtractor(object):
                     players on other sites. Can be True (=always allowed),
                     False (=never allowed), None (=unknown), or a string
                     specifying the criteria for embedability (Eg: 'whitelist').
+    __post_extractor: A function to be called just before the metadata is
+                    written to either disk, logger or console. The function
+                    must return a dict which will be added to the info_dict.
+                    This is usefull for additional information that is
+                    time-consuming to extract. Note that the fields thus
+                    extracted will not be available to output template and
+                    match_filter. So, only "comments" and "comment_count" are
+                    currently allowed to be extracted via this method.
 
     The following fields should only be used when the video belongs to some logical
     chapter or section:
@@ -606,6 +614,14 @@ class InfoExtractor(object):
 
         See _download_webpage docstring for arguments specification.
         """
+        if not self._downloader._first_webpage_request:
+            sleep_interval = float_or_none(self._downloader.params.get('sleep_interval_requests')) or 0
+            if sleep_interval > 0:
+                self.to_screen('Sleeping %s seconds ...' % sleep_interval)
+                time.sleep(sleep_interval)
+        else:
+            self._downloader._first_webpage_request = False
+
         if note is None:
             self.report_download_webpage(video_id)
         elif note is not False:
@@ -1888,15 +1904,16 @@ class InfoExtractor(object):
         # media playlist and MUST NOT appear in master playlist thus we can
         # clearly detect media playlist with this criterion.
 
-        def _extract_m3u8_playlist_formats(format_url=None, m3u8_doc=None):
+        def _extract_m3u8_playlist_formats(format_url=None, m3u8_doc=None, video_id=None,
+                                           fatal=True, data=None, headers={}):
             if not m3u8_doc:
                 if not format_url:
                     return []
                 res = self._download_webpage_handle(
                     format_url, video_id,
                     note=False,
-                    errnote=errnote or 'Failed to download m3u8 playlist information',
-                    fatal=fatal, data=data, headers=headers, query=query)
+                    errnote='Failed to download m3u8 playlist information',
+                    fatal=fatal, data=data, headers=headers)
 
                 if res is False:
                     return []
@@ -1968,7 +1985,8 @@ class InfoExtractor(object):
             if media_url:
                 manifest_url = format_url(media_url)
                 format_id = []
-                playlist_formats = _extract_m3u8_playlist_formats(manifest_url)
+                playlist_formats = _extract_m3u8_playlist_formats(manifest_url, video_id=video_id,
+                                                                  fatal=fatal, data=data, headers=headers)
 
                 for format in playlist_formats:
                     format_index = format.get('index')
@@ -2029,7 +2047,8 @@ class InfoExtractor(object):
                     or last_stream_inf.get('BANDWIDTH'), scale=1000)
                 manifest_url = format_url(line.strip())
 
-                playlist_formats = _extract_m3u8_playlist_formats(manifest_url)
+                playlist_formats = _extract_m3u8_playlist_formats(manifest_url, video_id=video_id,
+                                                                  fatal=fatal, data=data, headers=headers)
 
                 for format in playlist_formats:
                     format_id = []
